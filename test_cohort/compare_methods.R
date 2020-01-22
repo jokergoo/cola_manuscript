@@ -2,184 +2,29 @@
 
 library(cola)
 library(GetoptLong)
+library(matrixStats)
 BASE_DIR = "/icgc/dkfzlsdf/analysis/B080/guz/cola_test"
 
-### test the running time for each method
+####################################################
+# project = "GDS"
 
-register_NMF()
+GetoptLong("project=s", "project")
 
-n = 20
-tm_df = NULL
-for(n in c(20, 50, 100, 200)) {
-	for(pm in all_partition_methods()) {
-		for(k in 2:6) {
-			tm = NULL
-			cat(paste0(n, "-", pm, "-", k), "...\n")
-			f = cola:::get_partition_method(pm)
-			counter = set_counter(100)
-			for(i in 1:100) {
-				m = matrix(runif(n*n), nr = n)
-				t1 = nanotime(Sys.time()) 
-				f(m, k)
-				t2 = nanotime(Sys.time()) 
-				tm[i] = as.numeric(t2 - t1)
-				counter()
-			}
-
-			tm_df = rbind(tm_df, data.frame(n = n, pm = pm, k = k, time = tm))
-		}
-	}
-}
-save(tm_df, file = "/icgc/dkfzlsdf/analysis/B080/guz/cola_test/partition_method_running_time.RData")
-
-pdf(qq("@{BASE_DIR}/image/partition_method_running_time.pdf"), width = 14, height = 5)
-
-tm_df$pm = factor(tm_df$pm, levels = c("hclust", "kmeans", "pam", "mclust", "skmeans", "NMF"))
-library(ggplot2)
-library(scales)
-ggplot(tm_df, aes(x=pm, y=time, fill=paste0("k=",k))) + 
-    geom_boxplot() +
-    scale_y_continuous(trans = log10_trans(),
-    	 labels = trans_format("log10", function(x) paste0(10^(x-9), "s"))) +
-    facet_wrap(~n, nrow = 1)
-dev.off()
-
-
-
-collect_stat = function(project) {
+collect_all_stats = function(project) {
 	if(project == "recount2") {
 		id_list = dir("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/recount2")
 	} else if(project == "GDS") {
 		id_list = dir("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/GDS", pattern = "^GDS\\d+$")
 	}
-	
+
+	df = file.info(qq("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/@{project}/@{id_list}", collapse = FALSE))
+	id_list = basename(rownames(df)[df$isdir])
+
 	lt = list()
+	i = 0
 	for(id in id_list) {
-		qqcat("loading @{id}...\n")
-		oe = try({
-			res_list = readRDS(qq("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/@{project}/@{id}/@{id}_cola_all.rds"))
-			tb = suggest_best_k(res_list)
-			tb = tb[order(rownames(tb)), ]
-		})
-
-		if(!inherits(oe, "try-error")) {
-			lt[[id]] = tb
-		}
-	}
-	return(lt)
-}
-
-
-library(ComplexHeatmap)
-library(circlize)
-library(RColorBrewer)
-library(matrixStats)
-make_plot = function(lt, field) {
-	# anno = data.frame(
-	# 	top_value_method = gsub("^(.*):.*$", "\\1", rownames(lt[[1]])),
-	# 	partition_method = gsub("^.*:(.*)$", "\\1", rownames(lt[[1]])),
-	# 	stringsAsFactors = FALSE
-	# )
-	# anno_col = list(
-	# 	top_value_method = structure(brewer.pal(4, "Set1"), names = unique(anno$top_value_method)),
-	# 	partition_method = structure(brewer.pal(6, "Set2"), names = unique(anno$partition_method))
-	# )
-
-	m = do.call(rbind, lapply(lt, function(x) x[, field]))
-	if(field == "PAC") {
-		m = 1 - m
-		field = "1 - PAC"
-	}
-	colnames(m) = rownames(lt[[1]])
-
-	best_k = do.call(rbind, lapply(lt, function(x) x[, "best_k"]))
-	colnames(best_k) = rownames(lt[[1]])
-	p_best_k = t(apply(best_k, 2, function(x) {
-		y = rep(0, 5)
-		names(y) = 2:6
-		tb = table(x)
-		y[names(tb)] = tb
-		y/length(x)
-	}))
-
-	ht = densityHeatmap(m, column_order = order(colMedians(m, na.rm = TRUE)), ylab = field, ylim = c(min(m, na.rm = TRUE), 1),
-		# bottom_annotation = HeatmapAnnotation(df = anno, col = anno_col, gp = gpar(col = "white")),
-		bottom_annotation = HeatmapAnnotation(p = anno_barplot(p_best_k, gp = gpar(fill = 2:6)), height = unit(3, "cm")),
-		column_names_rot = 45,
-		column_names_gp = gpar(col = ifelse(grepl("ATC|skmeans", colnames(m)), "red", "black")))
-	draw(ht)
-
-	return(invisible(m))
-}
-
-lt = collect_stat("GDS")
-
-
-### compare best_k
-m = matrix(NA, nrow = nrow(lt[[1]]), ncol = length(lt))
-rownames(m) = rownames(lt[[1]])
-colnames(m) = names(lt)
-for(i in seq_along(lt)) {
-	l = lt[[i]][, 6] != ""
-	m[l, i] = lt[[i]][l, 1]
-}
-m2 = apply(m, 2, function(x) {
-	x - median(x, na.rm = TRUE)
-})
-row_split = ifelse(grepl("ATC|skmeans", rownames(m)), "ATC|skmeans", "others")
-# Heatmap(m, row_split = row_split, column_order = order(colSums(m)),
-# 	cluster_rows = FALSE, cluster_columns = FALSE,
-# 	col = colorRamp2(c(2, 6), c("white", "red")))
-# dev.off()
-
-x = colMeans(m[row_split == "ATC|skmeans", ], na.rm = T)
-y = colMeans(m[row_split != "ATC|skmeans", ], na.rm = T)
-
-p = t.test(x - y, alternative = "greater")$p.value
-
-od = order(x - y)
-pdf(qq("@{BASE_DIR}/image/recount2_best_k_diff.pdf"))
-plot(sort(x -y), type= "p", main = p)
-abline(h = 0)
-abline(v = mean(which(sort(x - y) == 0)))
-dev.off()
-
-# cophcor
-# PAC
-# mean_silhouette
-# concordance 
-image1 = grid.grabExpr(make_plot(lt, "cophcor"))
-image2 = grid.grabExpr(make_plot(lt, "PAC"))
-image3 = grid.grabExpr(make_plot(lt, "mean_silhouette"))
-image4 = grid.grabExpr(make_plot(lt, "concordance"))
-pdf(qq("@{BASE_DIR}/image/GDS_stat_best_k_density_distribution.pdf"), width = 30, height = 8)
-grid.newpage()
-pushViewport(viewport(x = 0, width = 0.25, just = "left"))
-grid.draw(image1)
-popViewport()
-pushViewport(viewport(x = 0.25, width = 0.25, just = "left"))
-grid.draw(image2)
-popViewport()
-pushViewport(viewport(x = 0.5, width = 0.25, just = "left"))
-grid.draw(image3)
-popViewport()
-pushViewport(viewport(x = 0.75, width = 0.25, just = "left"))
-grid.draw(image4)
-popViewport()
-dev.off()
-
-
-# compare different statistics
-collect_all_stat = function(project) {
-	if(project == "recount2") {
-		id_list = dir("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/recount2")
-	} else if(project == "GDS") {
-		id_list = dir("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/GDS", pattern = "^GDS\\d+$")
-	}
-	
-	lt = list()
-	for(id in id_list) {
-		qqcat("loading @{id}...\n")
+		i = i + 1
+		qqcat("loading @{id} (@{i}/@{length(id_list)})...\n")
 		oe = try({
 			res = readRDS(qq("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/@{project}/@{id}/@{id}_cola_all.rds"))
 
@@ -188,13 +33,21 @@ collect_all_stat = function(project) {
 				df = as.data.frame(df)
 				df$method = rownames(df)
 				df$id = id
-				best_k = guess_best_k(res)[rownames(df), ]
+				best_k = suggest_best_k(res)[rownames(df), ]
 				df$best_k = best_k$best_k
-				df$best_k_sig = best_k[, ncol(best_k)]
-				rownames(df) = NULL
-				df$PAC = 1 - df$PAC
-				names(df)[names(df) == "PAC"] = "1-PAC"
 				df$n_sample = ncol(res)
+				
+				if(is.null(get_anno(res))) {
+					df$p_anno = NA
+				} else {
+					pmat = test_to_known_factors(res, k = k)
+					pmat = pmat[rownames(df), , drop = FALSE]
+					pmat = pmat[, -1, drop = FALSE]
+					pmat = pmat[, -ncol(pmat), drop = FALSE]
+					pmat = as.matrix(pmat)
+					df$p_anno = rowMins(pmat)
+				}
+				rownames(df) = NULL
 				df
 			}))
 		})
@@ -206,23 +59,126 @@ collect_all_stat = function(project) {
 	return(do.call("rbind", lt))
 }
 
-df_all = collect_all_stat("recount2")
-
-library(GGally)
-for(method in unique(df_all$method)) {
-	l = df_all$method == method
-	p = ggpairs(df_all[l, 2:5], mapping = aes(color = paste0("k=", df_all$k[l]))) + ggtitle(method)
-	print(p)
+file = qq("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/@{project}/@{project}_df_all.rds")
+if(file.exists(file)) {
+	df_all = readRDS(file)
+} else {
+	df_all = collect_all_stats(project)
+	saveRDS(df_all, file = qq("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/@{project}/@{project}_df_all.rds"))
 }
 
+# density heatmap for the statistics
+library(ComplexHeatmap)
+library(circlize)
+library(RColorBrewer)
+library(matrixStats)
+make_plot = function(df_all, field) {
+	lt = split(df_all, df_all$method)
+	lt = lapply(lt, function(df) df[df$k == df$best_k, ])
+	lt = lapply(lt, function(x) {
+		x = x[, field]
+		x[!is.na(x)]
+	})
+
+	anno = data.frame(
+		good = ifelse(grepl("ATC|skmeans", names(lt)), "yes", "no"),
+		bad = ifelse(grepl("hclust", names(lt)), "yes", "no"))
+	anno_col = list(good = c("yes" = "red", "no" = "#EEEEEE"),
+		            bad = c("yes" = "blue", "no" = "#EEEEEE"))
+
+	ht = densityHeatmap(lt, column_order = order(sapply(lt, median)), ylab = field, ylim = c(min(unlist(lt), na.rm = TRUE), 1),
+		bottom_annotation = HeatmapAnnotation(df = anno, col = anno_col, show_legend = FALSE, simple_anno_size = unit(2, "mm"), show_annotation_name = FALSE, gp = gpar(col = "white", lwd = 0.5)),
+		column_names_rot = 45, column_title = qq("Density heatmap of @{field}"),
+		column_names_gp = gpar(fontsize = 8))
+	draw(ht)
+	return(names(lt)[order(sapply(lt, median))])
+}
+
+image1 = grid.grabExpr({col_od <- make_plot(df_all, "1-PAC")})
+image2 = grid.grabExpr(make_plot(df_all, "mean_silhouette"))
+image3 = grid.grabExpr(make_plot(df_all, "concordance"))
+pdf(qq("@{BASE_DIR}/image/@{project}_stat_best_k_density_distribution.pdf"), width = 20, height = 8)
+grid.newpage()
+pushViewport(viewport(x = 0, width = 1/3, just = "left"))
+grid.draw(image1)
+popViewport()
+pushViewport(viewport(x = 1/3, width = 1/3, just = "left"))
+grid.draw(image2)
+popViewport()
+pushViewport(viewport(x = 2/3, width = 1/3, just = "left"))
+grid.draw(image3)
+popViewport()
+dev.off()
+
+figure_b = image1
+
+lt = split(df_all, df_all$method)
+lt = lapply(lt, function(df) df[df$k == df$best_k, ])
+
+
+# for each method, proportion of stable partitions for the best k
+pct1 = sapply(sapply(lt, function(df) {
+	structure(names = rownames(df), df$`1-PAC` >= 0.9)
+}), function(x) sum(x, na.rm = TRUE)/length(x))
+
+# proportion of best k
+pct2 = sapply(sapply(lt, function(df) {
+	best_k = df$best_k
+	best_k[df$`1-PAC` < 0.9] = NA
+	structure(names = rownames(df), best_k)
+}), function(x) {
+	tb = table(x)
+	y = rep(0, 5)
+	names(y) = 2:6
+	y[names(tb)] = tb/length(x)
+	y
+})
+
+library(reshape2)
+library(ggplot2)
+
+p2_df = melt(pct2)
+colnames(p2_df) = c("k", "method", "p")
+
+pdf(qq("@{BASE_DIR}/image/@{project}_best_k_prop.pdf"), width = 8, height = 8)
+
+# ggplot(data.frame(p = pct1), aes(x = factor(names(pct1), levels = names(p1)[order(pct1)]), y = p)) + 
+# 	geom_bar(stat = "identity") +
+# 	theme(axis.text.x = element_text(angle = 45, hjust = 1))
+	
+pc = ggplot(p2_df, aes(x = factor(method, levels = col_od), y = p, fill = factor(k, levels = 6:2))) + 
+	geom_bar(stat = "identity") +
+	theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+	labs(x = "Partition methods", y = "Proportion", fill = "k") +
+	ggtitle("Proportion of the best k")
+print(pc)
+dev.off()
+
+figure_c = pc
+
+
+library(cowplot)
+theme_set(theme_grey())
+pdf(qq("@{BASE_DIR}/image/@{project}_stat_ggparis.pdf"), width = 12, height = 4)
+for(method in unique(df_all$method)) {
+	l = df_all$method == method
+	df2 = df_all[l, ]
+	p1 = ggplot(df2, aes(x = mean_silhouette, y = concordance, color = paste0("k=", k))) +
+		geom_point() + ggtitle(method) + labs(color = "Number of\npartitions")
+	p2 = ggplot(df2, aes(x = mean_silhouette, y = `1-PAC`, color = paste0("k=", k))) +
+		geom_point() + ggtitle(method) + labs(color = "Number of\npartitions")
+	p3 = ggplot(df2, aes(x = concordance, y = `1-PAC`, color = paste0("k=", k))) +
+		geom_point() + ggtitle(method) + labs(color = "Number of\npartitions")
+	p = plot_grid(p1, p2, p3, nrow = 1)
+	print(p)
+}
+dev.off()
+
 foo = tapply(seq_len(nrow(df_all)), df_all[, c("k", "method")], function(ind) {
-	cm = cor(df_all[ind, c("cophcor", "1-PAC", "mean_silhouette", "concordance")], method = "spearman")
-	c("PAC_vs_cophcor" = cm["1-PAC", "cophcor"],
-	  "mean_silhouette_vs_cophcor" = cm["mean_silhouette", "cophcor"],
-	  "concordance_vs_cophcor" = cm["concordance", "cophcor"],
-	  "mean_silhouette_vs_PAC" = cm["mean_silhouette", "1-PAC"],
-	  "concordance_vs_PAC" = cm["concordance", "1-PAC"],
-	  "concordance_vs_mean_silhouette" = cm["concordance", "mean_silhouette"])
+	cm = cor(df_all[ind, c("1-PAC", "mean_silhouette", "concordance")], method = "spearman")
+	c("mean_silhouette\nvs\n1-PAC" = cm["mean_silhouette", "1-PAC"],
+	  "concordance\nvs\n1-PAC" = cm["concordance", "1-PAC"],
+	  "concordance\nvs\nmean_silhouette" = cm["concordance", "mean_silhouette"])
 })
 
 arr = array(0, dim = c(nrow(foo), ncol(foo), length(foo[1, 1][[1]])),
@@ -233,109 +189,189 @@ for(i in seq_len(nrow(foo))) {
 	}
 }
 
+library(reshape2)
 df = melt(arr)
 colnames(df) = c("k", "method", "comparison", "correlation")
-pdf(qq("@{BASE_DIR}/image/GDS_stat_correlation.pdf"), width = 20, height = 6.5)
-
-ggplot(df, aes(x = comparison, y = correlation)) + 
-	geom_boxplot() + facet_wrap( ~ factor(k), nrow = 1) +
-	theme(axis.text.x = element_text(angle = 45, hjust = 1))
+pdf(qq("@{BASE_DIR}/image/@{project}_stat_correlation.pdf"), width = 7, height = 7)
+p = ggplot(df, aes(x = comparison, y = correlation, fill = factor(k))) + 
+	geom_boxplot() + ylim(c(0, 1)) + ggtitle("Correlation between statistics") +
+	labs("x" = "Comparison", "y" = "Correlation", fill = "k")
+print(p)
 dev.off()
 
+figure_a = p
 
 
-## simply distribution of statistics
-df = rbind(data.frame(k = df_all$k, value = df_all$cophcor, method = df_all$method, stat = "cophcor", n_sample = df_all$n_sample),
-	       data.frame(k = df_all$k, value = df_all[, "1-PAC"], method = df_all$method, stat = "1-PAC", n_sample = df_all$n_sample),
-	       data.frame(k = df_all$k, value = df_all$mean_silhouette, method = df_all$method, stat = "mean_silhouette", n_sample = df_all$n_sample),
-	       data.frame(k = df_all$k, value = df_all$concordance, method = df_all$method, stat = "concordance", n_sample = df_all$n_sample)
-)
-pdf(qq("@{BASE_DIR}/image/recount2_stat_distribution.pdf"), width = 16, height = 9)
-
-ggplot(df, aes(x = value, group = stat, fill = stat)) +
-	geom_density() +
-	facet_grid(stat ~ k)
-ggplot(df, aes(y = value, x = factor(round(n_sample*2, -2)/2))) +
-	geom_boxplot() +
-	facet_grid(stat ~ k)
-dev.off()
-
-
-#### go through consensus heatmap and member ship heatmap to determine a proper PAC cutoff
-make_cc_plot = function(project) {
+####### dissimilarity between methods
+library(clue)
+collect_hclust = function(project, k) {
 	if(project == "recount2") {
 		id_list = dir("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/recount2")
 	} else if(project == "GDS") {
 		id_list = dir("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/GDS", pattern = "^GDS\\d+$")
 	}
-	par(ask = TRUE)
-	on.exit(par(ask = FALSE))
+
+	df = file.info(qq("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/@{project}/@{id_list}", collapse = FALSE))
+	id_list = basename(rownames(df)[df$isdir])
 
 	lt = list()
+	i = 0
 	for(id in id_list) {
-		qqcat("loading @{id}...\n")
-		oe = try({
-			res_list = readRDS(qq("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/@{project}/@{id}/@{id}_cola_all.rds"))
-		})
+		i = i + 1
+		qqcat("loading @{id} (@{i}/@{length(id_list)})...\n")
+			
+		res = readRDS(qq("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/@{project}/@{id}/@{id}_cola_all.rds"))
 
-		if(!inherits(oe, "try-error")) {
-			for(i in seq_along(res_list@list)) {
-				stat = get_stats(res_list@list[[i]], k = guess_best_k(res_list@list[[i]]))
-				consensus_heatmap(res_list@list[[i]], k = guess_best_k(res_list@list[[i]]))
-				decorate_heatmap_body("Consensus", {
-					grid.text(qq("pac = @{stat[1, 'PAC']}\nmean_silhouette = @{stat[1, 'mean_silhouette']}"),
-						x = 0, y = 0, just = c("left", "bottom"))
-				})
-			}
-		}
+		pl = lapply(res@list, function(x) as.cl_partition(get_membership(x, k = k)))
+		clen = cl_ensemble(list = pl)
+		m_diss = cl_dissimilarity(clen, method = "euclidean")
+		lt[[i]] = hclust(m_diss)
 	}
+	names(lt) = id_list
 	return(lt)
 }
-make_cc_plot("recount2")
-make_cc_plot("GDS")
+
+pdf(qq("@{BASE_DIR}/image/@{project}_partition_similarity.pdf"), width = 7, height = 7)
+k = 2
+hl = collect_hclust(project, k = k)
+hens = cl_ensemble(list = hl)
+dend = cl_consensus(hens)
+dend = as.dendrogram(hclust(dend$.Data))
+library(ggdendro)
+
+p = ggdendrogram(dend, rotate = TRUE) + scale_y_continuous(expand = c(0.01, 0.01), labels = NULL) +
+    ggtitle(qq("Similarity of Partitions, k = @{k}"))
+print(p)
+
+label_color = c(`ATC:hclust` = "#66C2A5", `ATC:kmeans` = "#66C2A5", `ATC:pam` = "#66C2A5", 
+`ATC:mclust` = "#66C2A5", `ATC:NMF` = "#66C2A5", `ATC:skmeans` = "#66C2A5", 
+`CV:hclust` = "#FC8D62", `SD:hclust` = "#FC8D62", `MAD:hclust` = "#FC8D62", 
+`CV:pam` = "#8DA0CB", `SD:pam` = "#8DA0CB", `MAD:pam` = "#8DA0CB", 
+`CV:mclust` = "#E78AC3", `SD:mclust` = "#E78AC3", `MAD:mclust` = "#E78AC3", 
+`CV:NMF` = "#A6D854", `SD:NMF` = "#A6D854", `MAD:NMF` = "#A6D854", 
+`CV:skmeans` = "#FFD92F", `SD:skmeans` = "#FFD92F", `MAD:skmeans` = "#FFD92F", 
+`CV:kmeans` = "#E5C494", `SD:kmeans` = "#E5C494", `MAD:kmeans` = "#E5C494"
+)
+
+library(dendextend)
+library(ComplexHeatmap)
+figure_d = grid.grabExpr(gridGraphics::grid.echo(function() {
+	par(mar = c(4, 2, 2, 7), cex = 0.9)
+	if(project == "recount2") {
+		dend = rotate(dend, names(label_color))
+	}
+	color_labels(dend, col = label_color[labels(dend)]) %>% plot(horiz = TRUE, main = "Similarity between partitions")
+
+	if(project == "GDS") {
+		rect(0-0.05, 1-0.3, dend_heights(dend[[1]]) + 0.2, 6 + 0.3, border = label_color[1], lty = 2)
+		rect(0-0.05, 7-0.3, dend_heights(dend[[2]][[1]]) + 0.2, 9 + 0.3, border = label_color[7], lty = 2)
+		rect(0-0.05, 10-0.3, dend_heights(dend[[2]][[2]][[1]]) + 0.2, 12 + 0.3, border = label_color[10], lty = 2)
+		rect(0-0.05, 13-0.3, dend_heights(dend[[2]][[2]][[2]][[1]]) + 0.2, 15 + 0.3, border = label_color[13], lty = 2)
+		rect(0-0.05, 16-0.3, dend_heights(dend[[2]][[2]][[2]][[2]][[1]]) + 0.2, 18 + 0.3, border = label_color[16], lty = 2)
+		rect(0-0.05, 19-0.3, dend_heights(dend[[2]][[2]][[2]][[2]][[2]][[1]]) + 0.2, 21 + 0.3, border = label_color[19], lty = 2)
+		rect(0-0.05, 22-0.3, dend_heights(dend[[2]][[2]][[2]][[2]][[2]][[2]]) + 0.2, 24 + 0.3, border = label_color[22], lty = 2)
+	}
+}))
+	
+
+dev.off()
+
+if(0) {
+
+project = "GDS"
+e1 = new.env()
+sys.source("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/script/test_cohort/compare_methods.R", envir = e1)
+figure_a1 = e1$figure_a
+figure_b1 = e1$figure_b
+figure_c1 = e1$figure_c
+figure_d1 = e1$figure_d
+
+project = "recount2"
+e2 = new.env()
+sys.source("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/script/test_cohort/compare_methods.R", envir = e2)
+figure_a2 = e2$figure_a
+figure_b2 = e2$figure_b
+figure_c2 = e2$figure_c
+figure_d2 = e2$figure_d
+
+# dl = untangle(e1$dend, e2$dend, method = "step2side")
+# figure_d1 = ggdendrogram(dl[[1]], rotate = TRUE) + scale_y_continuous(expand = c(0.01, 0.01), labels = NULL) +
+#     ggtitle("Similarity of Partitions")
+
+# figure_d2 = ggdendrogram(dl[[2]], rotate = TRUE) + scale_y_continuous(expand = c(0.01, 0.01), labels = NULL) +
+#     ggtitle("Similarity of Partitions")
+
+library(cowplot)
+theme_set(theme_grey())
+
+pdf(qq("@{BASE_DIR}/image/figure4.pdf"), width = 20, height = 20/2)
+p = plot_grid(
+		plot_grid(figure_a1, figure_b1, figure_c1, figure_d1, labels = c("A", "B", "C", "D"), align = "h", nrow = 1, rel_widths = c(1, 1.2, 1, 1)),
+    	plot_grid(figure_a2, figure_b2, figure_c2, figure_d2, labels = c("E", "F", "G", "H"), align = "h", nrow = 1, rel_widths = c(1, 1.2, 1, 1)),
+    	align = "v", ncol = 1
+    )
+print(p)
+dev.off()
 
 
-### check the functional ...
+### running time for each dataset
 
-collect_p = function(project, field = c("gene", "BP", "CC", "MF")) {
+collect_running_time = function(project) {
 	if(project == "recount2") {
 		id_list = dir("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/recount2")
 	} else if(project == "GDS") {
 		id_list = dir("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/GDS", pattern = "^GDS\\d+$")
 	}
 
-	field = match.arg(field)[1]
-	
-	lt = list()
-	for(id in id_list) {
-		qqcat("loading @{id}...\n")
-		oe = try({
-			load(qq("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/@{project}/@{id}/@{id}_sig_gene_GO.RData"))
-			p = get(qq("p_sig_@{field}"))
-			x = p[, 1]/p[, 2]
-		})
+	df = file.info(qq("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/@{project}/@{id_list}", collapse = FALSE))
+	id_list = basename(rownames(df)[df$isdir])
 
-		if(!inherits(oe, "try-error")) {
-			lt[[id]] = x
-		}
+	
+	method = NULL
+	running_time = NULL
+	n_sample = NULL
+	pid = NULL
+	i = 0
+	for(id in id_list) {
+		i = i + 1
+		qqcat("loading @{id} (@{i}/@{length(id_list)})...\n")
+		oe = try({
+			res = readRDS(qq("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/@{project}/@{id}/@{id}_cola_all.rds"))
+
+			pm = gsub("^.*:", "", names(res@list))
+			x = sapply(res@list, function(x) x@running_time)
+			x = tapply(x, pm, mean)
+			running_time = c(running_time, x)
+			method = c(method, names(x))
+			n_sample = c(n_sample, rep(ncol(res), length(x)))
+			pid = c(pid, rep(id, length(x)))
+		})
 	}
-	do.call(rbind, lt)
+
+	data.frame(partition_method = method,
+		       n_sample = n_sample,
+		       running_time = running_time,
+		       pid = pid,
+		       stringsAsFactors = FALSE)
 }
-image = list()
-for(field in c("gene", "BP", "MF", "CC")) {
-	m = collect_p("GDS", field)
-	ht = densityHeatmap(m, column_order = order(colMeans(m, na.rm = TRUE)), ylab = NULL, ylim = range(m, na.rm = TRUE),
-		column_names_gp = gpar(col = ifelse(grepl("ATC|skmeans", colnames(m)), "red", "black")), show_heatmap_legend = FALSE,
-		column_title = qq("density heatmap of sig_@{field}%"))
-	image[[field]] = grid.grabExpr(draw(ht))
-}
-pdf(qq("@{BASE_DIR}/image/GDS_p_gene_GO.pdf"), width = 18.5, height = 5.2)
-grid.newpage()
-pushViewport(viewport(layout = grid.layout(nr = 1, nc = 4)))
-for(i in seq_along(image)) {
-	pushViewport(viewport(layout.pos.row = 1, layout.pos.col = i))
-	grid.draw(image[[i]])
-	popViewport()
-}
-popViewport()
+
+df1 = collect_running_time("GDS"); df1$dataset = "GDS"
+df2 = collect_running_time("recount2"); df2$dataset = "recount2"
+df = rbind(df1, df2)
+
+df$partition_method = factor(df$partition_method, levels = c("hclust", "kmeans", "pam", "mclust", "skmeans", "NMF"))
+
+library(ggplot2)
+library(scales)
+pdf(qq("@{BASE_DIR}/image/datasets_running_time.pdf"), width = 10, height = 5)
+p = ggplot(df, aes(x = n_sample, y = running_time, col = partition_method)) +
+	geom_point() + geom_smooth() +
+	scale_y_continuous(trans = log10_trans(),
+    	labels = trans_format("log10", function(x) paste0(10^x, "s"))) +
+	scale_x_continuous(breaks = seq(0, 500, 100)) +
+	facet_grid(.~ dataset, scales = "free_x", space = "free_x") +
+	labs(x = "Number of samples", y = "Running time", col = "Partition method")
+print(p)
 dev.off()
+
+}

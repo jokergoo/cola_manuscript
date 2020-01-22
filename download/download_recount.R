@@ -5,6 +5,8 @@ recount_abstract = read.csv("recount_selection_2018-11-13_14_42_40.csv", header 
 # sample size in 50 ~ 500
 anno = recount_abstract[recount_abstract[, 2] >= 50 & recount_abstract[, 2] < 500, ]
 
+library(SummarizedExperiment)
+
 for(pid in anno$accession) {
 	dir.create(pid)
 	url = paste0("http://duffel.rail.bio/recount/v2/", pid, "/rse_gene.Rdata")
@@ -15,19 +17,19 @@ for(pid in anno$accession) {
 # GTEx datasets
 df = read.table(textConnection(
 "http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_adrenal_gland.Rdata adrenal_gland
-http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_bladder.Rdata bladder
+# http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_bladder.Rdata bladder
 http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_adipose_tissue.Rdata adipose_tissue
 http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_blood_vessel.Rdata blood_vessel
 http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_blood.Rdata blood
 http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_bone_marrow.Rdata bone_marrow
 http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_brain.Rdata brain
 http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_breast.Rdata breast
-http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_cervix_uteri.Rdata cervix_uteri
+# http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_cervix_uteri.Rdata cervix_uteri
 http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_colon.Rdata colon
 http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_esophagus.Rdata esophagus
-http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_fallopian_tube.Rdata fallopian_tube
+# http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_fallopian_tube.Rdata fallopian_tube
 http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_heart.Rdata heart
-http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_kidney.Rdata kidney
+# http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_kidney.Rdata kidney
 http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_liver.Rdata liver
 http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_lung.Rdata lung
 http://duffel.rail.bio/recount/v2/SRP012682/rse_gene_muscle.Rdata muscle
@@ -56,7 +58,7 @@ for(i in seq_len(nrow(df))) {
 # TCGA datasets
 df = read.table(textConnection(
 "http://duffel.rail.bio/recount/v2/TCGA/rse_gene_adrenal_gland.Rdata adrenal_gland
-http://duffel.rail.bio/recount/v2/TCGA/rse_gene_bile_duct.Rdata bile_duct
+# http://duffel.rail.bio/recount/v2/TCGA/rse_gene_bile_duct.Rdata bile_duct
 http://duffel.rail.bio/recount/v2/TCGA/rse_gene_bladder.Rdata bladder
 http://duffel.rail.bio/recount/v2/TCGA/rse_gene_bone_marrow.Rdata bone_marrow
 http://duffel.rail.bio/recount/v2/TCGA/rse_gene_brain.Rdata brain
@@ -69,7 +71,7 @@ http://duffel.rail.bio/recount/v2/TCGA/rse_gene_head_and_neck.Rdata head_and_nec
 http://duffel.rail.bio/recount/v2/TCGA/rse_gene_kidney.Rdata kidney
 http://duffel.rail.bio/recount/v2/TCGA/rse_gene_liver.Rdata liver
 http://duffel.rail.bio/recount/v2/TCGA/rse_gene_lung.Rdata lung
-http://duffel.rail.bio/recount/v2/TCGA/rse_gene_lymph_nodes.Rdata lymph_nodes
+# http://duffel.rail.bio/recount/v2/TCGA/rse_gene_lymph_nodes.Rdata lymph_nodes
 http://duffel.rail.bio/recount/v2/TCGA/rse_gene_ovary.Rdata ovary
 http://duffel.rail.bio/recount/v2/TCGA/rse_gene_pancreas.Rdata pancreas
 http://duffel.rail.bio/recount/v2/TCGA/rse_gene_pleura.Rdata pleura

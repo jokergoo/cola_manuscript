@@ -7,7 +7,7 @@ library(GEOquery)
 library(GetoptLong)
 
 for(id in id_list) {
-	if("GDS1761" %in% id) next
+	if("GDS1761" %in% id) next # error with GEOquery
 	dir.create(qq("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/GDS/@{id}"))
 	try({
 		gds = getGEO(id, destdir = qq("/icgc/dkfzlsdf/analysis/B080/guz/cola_test/GDS/@{id}"))

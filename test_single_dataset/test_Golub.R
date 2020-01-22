@@ -1,11 +1,8 @@
 options(showWarnCalls = TRUE, showErrorCalls = TRUE)
 
-# root = "/home/guz"
-root = "/desktop-home/guz"
-
+setwd("/desktop-home/guz/project/development/cola_examples/Golub_leukemia/")
 
 library(cola)
-library(GetoptLong)
 
 library(golubEsets)
 data(Golub_Merge)
@@ -27,27 +24,16 @@ rownames(m) = rn
 
 register_NMF()
 
+anno = anno[, "ALL.AML", drop = FALSE]
+anno_col = list("ALL.AML" = c("ALL" = "red", "AML" = "blue"))
+
 set.seed(123)
 rl = run_all_consensus_partition_methods(
 	m,
-	top_n = c(1000, 2000, 3000, 4000), 
 	mc.cores = 4, 
-	anno = anno[, c("ALL.AML"), drop = FALSE],
-	anno_col = c("ALL" = "red", "AML" = "blue")
+	anno = anno,
+	anno_col = anno_col
 )
 
-saveRDS(rl, file = qq("@{root}/project/development/cola_examples/Golub_leukemia/Golub_leukemia_subgroup.rds"))
-cola_report(rl, output_dir = qq("@{root}/project/development/cola_examples/Golub_leukemia/Golub_leukemia_subgroup_cola_report"), mc.cores = 4)
-
-set.seed(123)
-rh = hierarchical_partition(
-	m,
-	top_n = c(1000, 2000, 3000, 4000), 
-	top_value_method = "ATC",
-	partition_method = "skmeans",
-	mc.cores = 4,
-	anno = anno[, c("ALL.AML"), drop = FALSE],
-	anno_col = c("ALL" = "red", "AML" = "blue")
-)
-saveRDS(rh, file = qq("@{root}/project/development/cola_examples/Golub_leukemia/Golub_leukemia_subgroup_hierarchical_partition.rds"))
-cola_report(rh, output_dir = qq("@{root}/project/development/cola_examples/Golub_leukemia/Golub_leukemia_subgroup_hierarchical_partition_cola_report"), mc.cores = 4)
+saveRDS(rl, file = "Golub_leukemia_subgroup.rds")
+cola_report(rl, output_dir = "Golub_leukemia_subgroup_cola_report", mc.cores = 4)
