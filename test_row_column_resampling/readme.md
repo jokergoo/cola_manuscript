@@ -1,0 +1,2 @@
+- `row_or_column_resampling.R` R script that tests the impact of row and column sampling for _cola_ analysis.
+- `row_or_column_resampling_plot.R` R script that makes plots in Figure 5 as well as in supplementaries.
