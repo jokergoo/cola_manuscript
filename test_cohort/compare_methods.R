@@ -89,7 +89,7 @@ make_plot = function(df_all, field) {
 	ht = densityHeatmap(lt, column_order = order(sapply(lt, median)), ylab = field, ylim = c(min(unlist(lt), na.rm = TRUE), 1),
 		bottom_annotation = HeatmapAnnotation(df = anno, col = anno_col, show_legend = FALSE, simple_anno_size = unit(2, "mm"), show_annotation_name = FALSE, gp = gpar(col = "white", lwd = 0.5)),
 		column_names_rot = 45, column_title = qq("Density heatmap of @{field}"),
-		column_names_gp = gpar(fontsize = 8))
+		column_names_gp = gpar(fontsize = 8), show_heatmap_legend = TRUE, show_quantiles = FALSE)
 	draw(ht)
 	return(names(lt)[order(sapply(lt, median))])
 }
@@ -149,8 +149,8 @@ pdf(qq("@{BASE_DIR}/image/@{project}_best_k_prop.pdf"), width = 8, height = 8)
 pc = ggplot(p2_df, aes(x = factor(method, levels = col_od), y = p, fill = factor(k, levels = 6:2))) + 
 	geom_bar(stat = "identity") +
 	theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-	labs(x = "Partition methods", y = "Proportion", fill = "k") +
-	ggtitle("Proportion of the best k")
+	labs(x = "", y = "Proportion", fill = "k") +
+	ggtitle("Proportion of stable partitions for a given k")
 print(pc)
 dev.off()
 
@@ -176,9 +176,9 @@ dev.off()
 
 foo = tapply(seq_len(nrow(df_all)), df_all[, c("k", "method")], function(ind) {
 	cm = cor(df_all[ind, c("1-PAC", "mean_silhouette", "concordance")], method = "spearman")
-	c("mean_silhouette\nvs\n1-PAC" = cm["mean_silhouette", "1-PAC"],
-	  "concordance\nvs\n1-PAC" = cm["concordance", "1-PAC"],
-	  "concordance\nvs\nmean_silhouette" = cm["concordance", "mean_silhouette"])
+	c("Mean silhouette\nvs 1-PAC" = cm["mean_silhouette", "1-PAC"],
+	  "Concordance\nvs 1-PAC" = cm["concordance", "1-PAC"],
+	  "Concordance vs\nMean silhouette" = cm["concordance", "mean_silhouette"])
 })
 
 arr = array(0, dim = c(nrow(foo), ncol(foo), length(foo[1, 1][[1]])),
@@ -195,7 +195,8 @@ colnames(df) = c("k", "method", "comparison", "correlation")
 pdf(qq("@{BASE_DIR}/image/@{project}_stat_correlation.pdf"), width = 7, height = 7)
 p = ggplot(df, aes(x = comparison, y = correlation, fill = factor(k))) + 
 	geom_boxplot() + ylim(c(0, 1)) + ggtitle("Correlation between statistics") +
-	labs("x" = "Comparison", "y" = "Correlation", fill = "k")
+	labs("x" = "", "y" = "Correlation", fill = "k") +
+	theme(axis.text.x = element_text(angle = 0, hjust = 0.5))
 print(p)
 dev.off()
 
@@ -256,7 +257,7 @@ label_color = c(`ATC:hclust` = "#66C2A5", `ATC:kmeans` = "#66C2A5", `ATC:pam` = 
 library(dendextend)
 library(ComplexHeatmap)
 figure_d = grid.grabExpr(gridGraphics::grid.echo(function() {
-	par(mar = c(4, 2, 2, 7), cex = 0.9)
+	par(mar = c(4, 2, 2, 12), cex = 0.8)
 	if(project == "recount2") {
 		dend = rotate(dend, names(label_color))
 	}
@@ -304,10 +305,10 @@ figure_d2 = e2$figure_d
 library(cowplot)
 theme_set(theme_grey())
 
-pdf(qq("@{BASE_DIR}/image/figure4.pdf"), width = 20, height = 20/2)
+pdf(qq("@{BASE_DIR}/image/figure4.pdf"), width = 16, height = 16/2)
 p = plot_grid(
-		plot_grid(figure_a1, figure_b1, figure_c1, figure_d1, labels = c("A", "B", "C", "D"), align = "h", nrow = 1, rel_widths = c(1, 1.2, 1, 1)),
-    	plot_grid(figure_a2, figure_b2, figure_c2, figure_d2, labels = c("E", "F", "G", "H"), align = "h", nrow = 1, rel_widths = c(1, 1.2, 1, 1)),
+		plot_grid(figure_a1, figure_b1, figure_c1, figure_d1, labels = c("A", "B", "C", "D"), align = "h", nrow = 1, rel_widths = c(0.9, 1, 1, 0.8)),
+    	plot_grid(figure_a2, figure_b2, figure_c2, figure_d2, labels = c("E", "F", "G", "H"), align = "h", nrow = 1, rel_widths = c(0.9, 1, 1, 0.8)),
     	align = "v", ncol = 1
     )
 print(p)
@@ -374,4 +375,33 @@ p = ggplot(df, aes(x = n_sample, y = running_time, col = partition_method)) +
 print(p)
 dev.off()
 
+pdf(qq("@{BASE_DIR}/image/datasets_running_time_unlog.pdf"), width = 10, height = 5)
+p = ggplot(df, aes(x = n_sample, y = running_time, col = partition_method)) +
+	geom_point() + geom_smooth() +
+	scale_x_continuous(breaks = seq(0, 500, 100)) +
+	facet_grid(.~ dataset, scales = "free_x", space = "free_x") +
+	labs(x = "Number of samples", y = "Running time", col = "Partition method")
+print(p)
+dev.off()
+
+}
+
+predict_running_time = function(df, partition_method, n) {
+	df2 = df[df$partition_method == partition_method, ]
+	x = df2$n_sample
+	y = df2$running_time
+	y = log10(y)
+	fit = loess(y ~ x)
+	y2 = predict(fit, n)
+	10^y2
+}
+
+tm = matrix(nrow = 6, ncol = 5)
+rownames(tm) = c("hclust", "kmeans", "pam", "mclust", "skmeans", "NMF")
+colnames(tm) = c(100, 200, 300, 400, 500)
+for(pm in c("hclust", "kmeans", "pam", "mclust", "skmeans", "NMF")) {
+	for(n in c(100, 200, 300, 400, 500)) {
+		t = predict_running_time(df2, pm, n)
+		tm[pm, as.character(n)] = t
+	}
 }

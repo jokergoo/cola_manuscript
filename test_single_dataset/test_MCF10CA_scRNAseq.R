@@ -4,11 +4,11 @@ setwd("/desktop-home/guz/project/development/cola_examples/MCF10CA_scRNAseq/")
 
 library(cola)
 
-rpkm = readRDS("MCF10CA_scRNAseq_rpkm.rds")
+tpm = readRDS("MCF10CA_scRNAseq_tpm.rds")
 
-m = log2(rpkm + 1)
+m = log2(tpm + 1)
 
-cell_type = ifelse(grepl("round", colnames(rpkm)), "round", "aberrant")
+cell_type = ifelse(grepl("round", colnames(m)), "round", "aberrant")
 cell_col = c("aberrant" = "red", "round" = "blue")
 
 m = adjust_matrix(m)

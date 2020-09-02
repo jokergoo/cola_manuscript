@@ -39,7 +39,7 @@ df_all$method = factor(df_all$method, levels = c("SD:hclust", "SD:skmeans", "ATC
 pdf(qq("@{BASE_DIR}/image/@{dataset}_row_or_column_resampling_boxplot.pdf"), width = 14, height = 4)
 library(ggplot2)
 library(scales)
-p = ggplot(df_all, aes(x=factor(k), y=`1-PAC`, fill=sample_by)) + 
+p = ggplot(df_all, aes(x=factor(k), y=`1-PAC`, col = sample_by)) + 
     geom_boxplot() + facet_wrap( ~ method, nrow = 1) + ylim(0, 1) +
     labs(x = "k", fill = "Sample by")
 print(p)
@@ -249,7 +249,7 @@ p = ggplot(df, aes(x=factor(k), y=f_scale(p), fill = compare)) +
     geom_hline(yintercept = f_scale(0.9), color = "grey", lty = 2) +
     scale_y_continuous(breaks = f_scale(c(0, 0.25, 0.5, 0.75, 0.9, 0.95, 0.975, 0.99, 1)), 
     	labels = c(0, 0.25, 0.5, 0.75, 0.9, 0.95, 0.975, 0.99, 1), limits = c(0, 1)) +
-    ylab("Corcodance between row/column sampling") +
+    ylab("Concodance between row/column sampling") +
     labs(x = "k", fill = "Comparison")
 print(p)
 dev.off()
@@ -257,8 +257,8 @@ dev.off()
 p = ggplot(df[df$compare == "row ~ column", ], aes(x=factor(k), y=p)) + 
     geom_bar(stat="identity", position=position_dodge()) + facet_wrap( ~ method, nrow = 1) + 
     scale_y_continuous(limits = c(0, 1)) +
-    ylab("Corcodance") +
-    ggtitle("Corcodance between row/column sampling") +
+    ylab("Concodance") +
+    ggtitle("Concodance between row/column sampling") +
     labs(x = "k")
 
 figure_c = p

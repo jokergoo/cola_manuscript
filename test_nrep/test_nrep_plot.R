@@ -342,9 +342,9 @@ figure_d = ggplot(df2, aes(x = pac_25, y = p, col = factor(k))) + geom_point() +
 library(cowplot)
 theme_set(theme_grey())
 
-pdf(qq("@{BASE_DIR}/image/@{dataset}_figure6.pdf"), width = 12, height = 8)
+pdf(qq("@{BASE_DIR}/image/@{dataset}_figure6.pdf"), width = 9, height = 6)
 p = plot_grid(figure_c, figure_d, labels = c("B", "C"), align = 'v', nrow = 2)
-p = plot_grid(figure_a, p, labels = c('A', ''), ncol = 2, rel_widths = c(2, 1))
+p = plot_grid(figure_a, p, labels = c('A', ''), ncol = 2, rel_widths = c(2, 1.2))
 print(p)
 dev.off()
 
